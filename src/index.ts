@@ -7,6 +7,13 @@
  *
  * Learn more at https://developers.cloudflare.com/workers/
  */
+import { 
+	APIInteraction, 
+	APIApplicationCommandInteraction, 
+	InteractionResponseType,
+	InteractionType, 
+} from 'discord-api-types/v10';
+import {handle} from './interactions';
 
 // Convert a hex string to a byte array
 function hexToBytes(hex: string) {
@@ -67,40 +74,21 @@ export default {
 		if (!isVerified) {
 			return new Response('invalid request signature', { status: 401 });
 		}
-		var interaction = JSON.parse(body);
-		if (interaction.type === 1) {
-			// just a ping, ack it
-			var ack = {
-				"type": 1
-			};
-			return new Response(JSON.stringify(ack), {
+		const interaction: APIInteraction = JSON.parse(body);
+		if (interaction.type === InteractionType.Ping) {
+			return new Response(JSON.stringify({
+				"type": InteractionResponseType.Pong
+			}), {
 				headers: {
 					'content-type': 'application/json;charset=UTF-8',
 				},
 			});
 		}
-		
-		// --------------------------------------------------------------------
-		//  cmds
-		// --------------------------------------------------------------------
-		var cmd = interaction.data;
-		var name = interaction.member.user.username;
-		var resp = {};
-		switch (cmd.name) {
-			// https://discord.com/developers/docs/resources/channel#message-object-message-flags
-			case "say": {
-				let said = cmd.options[0].value;
-				resp = {
-					type: 4, data: {
-						// flags: 1 << 6, 
-						content: `${name} says, "${said}"`
-					}
-				};
-				break;
-			}
-			default: break;
-		}
 
+		// --------------------------------------------------------------------
+		//  respond
+		// --------------------------------------------------------------------
+		let resp = await handle(interaction as APIApplicationCommandInteraction);
 		return new Response(JSON.stringify(resp), {
 			headers: {
 				'content-type': 'application/json;charset=UTF-8',
