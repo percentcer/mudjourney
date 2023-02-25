@@ -1,3 +1,5 @@
+# this only needs to be run if you're updating commands
+
 import requests
 import os
 
