@@ -37,6 +37,7 @@ export interface Env {
 	//
 	// Example binding to a Service. Learn more at https://developers.cloudflare.com/workers/runtime-apis/service-bindings/
 	// MY_SERVICE: Fetcher;
+	OPENAI_SECRET: string;
 }
 
 export default {
@@ -88,7 +89,7 @@ export default {
 		// --------------------------------------------------------------------
 		//  respond
 		// --------------------------------------------------------------------
-		let resp = await handle(interaction as APIApplicationCommandInteraction);
+		let resp = await handle(interaction as APIApplicationCommandInteraction, env);
 		return new Response(JSON.stringify(resp), {
 			headers: {
 				'content-type': 'application/json;charset=UTF-8',
