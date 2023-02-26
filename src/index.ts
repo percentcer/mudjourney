@@ -7,13 +7,13 @@
  *
  * Learn more at https://developers.cloudflare.com/workers/
  */
-import { 
-	APIInteraction, 
-	APIApplicationCommandInteraction, 
+import {
+	APIInteraction,
+	APIApplicationCommandInteraction,
 	InteractionResponseType,
-	InteractionType, 
+	InteractionType,
 } from 'discord-api-types/v10';
-import {handle} from './interactions';
+import { handle } from './interactions';
 
 // Convert a hex string to a byte array
 function hexToBytes(hex: string) {
@@ -89,8 +89,10 @@ export default {
 		// --------------------------------------------------------------------
 		//  respond
 		// --------------------------------------------------------------------
-		let resp = await handle(interaction as APIApplicationCommandInteraction, env);
-		return new Response(JSON.stringify(resp), {
+		ctx.waitUntil(handle(interaction as APIApplicationCommandInteraction, env));
+		return new Response(JSON.stringify({
+			type: InteractionResponseType.DeferredChannelMessageWithSource
+		}), {
 			headers: {
 				'content-type': 'application/json;charset=UTF-8',
 			},

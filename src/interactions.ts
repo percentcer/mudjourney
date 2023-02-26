@@ -8,6 +8,9 @@ import {
 
 import { Env } from '.'
 
+// discord stuff
+const DISCORD_API_ENDPOINT = "https://discord.com/api/v10";
+
 async function oai_complete(prompt: string, key: string) {
     const url = 'https://api.openai.com/v1/completions';
     const options = {
@@ -18,7 +21,7 @@ async function oai_complete(prompt: string, key: string) {
         },
         body: JSON.stringify({
             prompt: prompt,
-            max_tokens: 16,
+            max_tokens: 256,
             model: "text-davinci-003",
             temperature: 0,
         })
@@ -28,15 +31,15 @@ async function oai_complete(prompt: string, key: string) {
 }
 
 export async function handle(interaction: APIApplicationCommandInteraction, env: Env): Promise<any> {
-    let resp = {};
     if (!interaction.member) {
         // todo: what interactions don't have a member field?
-        return {
-            type: InteractionResponseType.ChannelMessageWithSource, data: {
-                flags: MessageFlags.Ephemeral,
-                content: `???`
-            }
-        };
+        return fetch(`${DISCORD_API_ENDPOINT}/webhooks/${interaction.application_id}/${interaction.token}/messages/@original`, {
+            method: 'PATCH',
+            headers: {
+                'content-type': 'application/json;charset=UTF-8',
+            },
+            body: JSON.stringify({ content: '???' })
+        });
     }
 
     const cmd = interaction.data as APIChatInputApplicationCommandInteractionData;
@@ -59,16 +62,19 @@ export async function handle(interaction: APIApplicationCommandInteraction, env:
                     { text: string }
                 ]
             };
-            resp = {
-                type: 4, data: {
-                    content: `
-                    ${username} mutters, "${said}".
-                    ${completion.choices[0].text}`
-                }
-            };
-            break;
+
+            let response = `${username} says, "${said}".
+            ${completion.choices[0].text}`;
+
+            // todo: it's interesting that we can do a whole host of behaviors here, not just editing the pending response (e.g. create chat channels, append emoji, change player names, etc)
+            return fetch(`${DISCORD_API_ENDPOINT}/webhooks/${interaction.application_id}/${interaction.token}/messages/@original`, {
+                method: 'PATCH',
+                headers: {
+                    'content-type': 'application/json;charset=UTF-8',
+                },
+                body: JSON.stringify({ content: response })
+            });
         }
         default: break;
     }
-    return resp;
 }
