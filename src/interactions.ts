@@ -51,7 +51,7 @@ export async function handle(interaction: APIApplicationCommandInteraction, env:
             let prompt = `
             Please complete the following as if you were the DM of a roleplaying campaign set in a fantasy world. 
             
-            The players will describe their actions and you will describe the events that follow, including changes to the environment, reactions from other characters in the world, and modifications to the players themselves.
+            The players will describe their actions and you will describe the events that follow, including changes to the environment and reactions from other characters.
             
             A player just said: "${said}".`
             const completion = await oai_complete(prompt, env.OPENAI_SECRET) as {
