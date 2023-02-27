@@ -2,8 +2,6 @@ import {
     APIApplicationCommandInteraction,
     APIChatInputApplicationCommandInteractionData,
     APIApplicationCommandInteractionDataStringOption,
-    InteractionResponseType,
-    MessageFlags,
 } from 'discord-api-types/v10';
 
 import { Env } from '.'
@@ -78,18 +76,31 @@ export async function handle(interaction: APIApplicationCommandInteraction, env:
             let said = options.length > 1 ? (options[1] as APIApplicationCommandInteractionDataStringOption).value : "";
             let optional_said = options.length > 1 ? ` and said "${said}" while doing so` : "";
 
+            // -------------------------------------------------------------------------------
+            // pre-completion
+            // -------------------------------------------------------------------------------
             let preamble;
+            let events: string[] = []
             if (docmap.has(interaction.channel_id)) {
                 preamble = await gdoc_preamble(docmap.get(interaction.channel_id)!);
             } else {
-                preamble = `
-                The following is a description of events, as described by a dungeon master, in a fantasy roleplaying campaign called "A Long and Treacherous Journey".
-            
-                If these events modify the player's health, stats, or inventory those changes are appended to the output as a bullet list in the form "subject: <change>"
-                If these events lead the party to a new location, that location is appended to the output in the form "location: <location_name>"
-                Finally, a short summary of the event is appended to the output in the form of "history: <summary>"`;
+                // todo Promise.all
+                let playerState = await env.TREACHEROUS.get(interaction.member.user.id) ?? JSON.stringify({ name: "", health: 0.99, hunger: 0.01, despair: 0.01, location: "" });
+                let eventString = await env.TREACHEROUS.get("events") ?? "[\"our story begins\"]";
+                events = JSON.parse(eventString);
+                preamble = `The following is a vivid accounting of events, as described by a dungeon master of a fantasy roleplaying campaign called "A Long and Treacherous Journey".
+
+Each description is followed by the string "---", then the updated state of the player JSON, another "---", and then a short, one-sentence summary of major events (if any).
+
+The previous state of the player was: ${playerState}
+
+Events leading up to this: ${events.join(',')}
+`;
             }
 
+            // -------------------------------------------------------------------------------
+            // completion
+            // -------------------------------------------------------------------------------
             let prompt = `${preamble}
             
             A player named ${username} has just performed an action: ${action}${optional_said}.
@@ -100,9 +111,46 @@ export async function handle(interaction: APIApplicationCommandInteraction, env:
                     { text: string }
                 ]
             };
+            let result = completion.choices[0].text.trim();
+
+            // -------------------------------------------------------------------------------
+            // post-completion
+            // -------------------------------------------------------------------------------
+            if (!docmap.has(interaction.channel_id)) {
+                let [description, update, eventSummary] = result.split('---');
+                result = description;
+    
+                // try to find something that looks like a json object:
+                const start = update.indexOf('{');
+                let idx = start;
+                if (idx > -1) {
+                    let count = 1;
+                    while (count > 0) {
+                        idx += 1;
+                        let chr = update.charAt(idx);
+                        if (chr === "{") {count += 1;}
+                        if (chr === "}") {count -= 1;}
+                    }
+                    
+                    try {
+                        let stringy = update.substring(start, idx + 1);
+                        console.log(stringy);
+                        let obj = JSON.parse(stringy);
+                        await env.TREACHEROUS.put(interaction.member.user.id, JSON.stringify(obj));
+                    } catch {console.log("failed to parse user json")}
+                }
+    
+                // check to see if we have a new event to append
+                if(eventSummary && eventSummary.trim()) {
+                    let latestEvent = eventSummary.trim();
+                    console.log(latestEvent);
+                    events.push(latestEvent);
+                    await env.TREACHEROUS.put("events", JSON.stringify(events));
+                }
+            }
 
             let response = `${username}: [${action}] ${said ? `"${said}"` : ""}
-            ${completion.choices[0].text}`;
+            ${result}`;
 
             // todo: it's interesting that we can do a whole host of behaviors here, not just editing the pending response (e.g. create chat channels, append emoji, change player names, etc)
             return fetch(`${DISCORD_API_ENDPOINT}/webhooks/${interaction.application_id}/${interaction.token}/messages/@original`, {
@@ -111,6 +159,27 @@ export async function handle(interaction: APIApplicationCommandInteraction, env:
                     'content-type': 'application/json;charset=UTF-8',
                 },
                 body: JSON.stringify({ content: response })
+            });
+        }
+        case 'j': {
+            // todo this should check the corresponding campaign
+            await fetch(`${DISCORD_API_ENDPOINT}/webhooks/${interaction.application_id}/${interaction.token}/messages/@original`, {
+                method: 'PATCH',
+                headers: {
+                    'content-type': 'application/json;charset=UTF-8',
+                },
+                body: JSON.stringify({ content: "checking the journal..." })
+            });
+            let events: string[] = JSON.parse(await env.TREACHEROUS.get('events') ?? "[]");
+            let recent = events.slice(-5);
+            let bulleted = recent.map(v => `* ${v}`);
+            return fetch(`${DISCORD_API_ENDPOINT}/channels/${interaction.channel_id}/messages`, {
+                method: 'POST',
+                headers: {
+                    'content-type': 'application/json;charset=UTF-8',
+                    'authorization': `Bot ${env.DISCORD_BOT_TOKEN}`
+                },
+                body: JSON.stringify({ content:  bulleted.join('\n'), flags: 1 << 6})
             });
         }
         default: break;

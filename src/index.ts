@@ -26,9 +26,8 @@ const public_key = "4e732bc086fa4af34d7cf1e1a4a36e9683189bdc4c6d662198761bcde6fd
 const public_key_bytes = new Uint8Array(hexToBytes(public_key));
 
 export interface Env {
-	// Example binding to KV. Learn more at https://developers.cloudflare.com/workers/runtime-apis/kv/
-	// MY_KV_NAMESPACE: KVNamespace;
-	//
+	TREACHEROUS: KVNamespace;
+	
 	// Example binding to Durable Object. Learn more at https://developers.cloudflare.com/workers/runtime-apis/durable-objects/
 	// MY_DURABLE_OBJECT: DurableObjectNamespace;
 	//
@@ -37,6 +36,8 @@ export interface Env {
 	//
 	// Example binding to a Service. Learn more at https://developers.cloudflare.com/workers/runtime-apis/service-bindings/
 	// MY_SERVICE: Fetcher;
+	
+	DISCORD_BOT_TOKEN: string;
 	OPENAI_SECRET: string;
 }
 
