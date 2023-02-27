@@ -11,6 +11,13 @@ import { Env } from '.'
 // discord stuff
 const DISCORD_API_ENDPOINT = "https://discord.com/api/v10";
 
+// google doc shortcut testing
+const docmap = new Map<string, string>([
+    ["1079577609626730576", "1BlIKPpwyRWTVaJwnx4JgIyjTuVJTpG7qNruOssEaB3U"], // 00
+    ["1079586450716246066", "1IL8pC54CZLJ-xHGE_W-KGOaH8HXPg37JZESN2r9atcU"], // 01
+    ["1079586472178503721", "1CoWxwrd7QgdUAK5k3LI0T-rnYdN6A3ZG-Z7KPVHnlAI"], // 02
+]);
+
 async function oai_complete(prompt: string, key: string) {
     const url = 'https://api.openai.com/v1/completions';
     const options = {
@@ -28,6 +35,24 @@ async function oai_complete(prompt: string, key: string) {
     };
     const response = await fetch(url, options);
     return await response.json();
+}
+
+async function gdoc_preamble(docid: string): Promise<string> {
+    // for easy testing just edit this google doc link
+    const url = `https://docs.google.com/document/d/${docid}/export?format=txt`;
+    // ------------------------------------------------------------------------
+    const response = await fetch(url, {
+        headers: {
+            "content-type": "application/json;charset=UTF-8",
+        },
+    });
+    const { headers } = response;
+    const contentType = headers.get("content-type") || ""
+    if (contentType.includes("application/json")) {
+        return JSON.stringify(await response.json())
+    } else {
+        return response.text();
+    }
 }
 
 export async function handle(interaction: APIApplicationCommandInteraction, env: Env): Promise<any> {
@@ -52,12 +77,20 @@ export async function handle(interaction: APIApplicationCommandInteraction, env:
             let action = (options[0] as APIApplicationCommandInteractionDataStringOption).value;
             let said = options.length > 1 ? (options[1] as APIApplicationCommandInteractionDataStringOption).value : "";
             let optional_said = options.length > 1 ? ` and said "${said}" while doing so` : "";
-            let prompt = `
-            The following is a description of events, as described by a dungeon master, in a fantasy roleplaying campaign called "A Long and Treacherous Journey".
+
+            let preamble;
+            if (docmap.has(interaction.channel_id)) {
+                preamble = await gdoc_preamble(docmap.get(interaction.channel_id)!);
+            } else {
+                preamble = `
+                The following is a description of events, as described by a dungeon master, in a fantasy roleplaying campaign called "A Long and Treacherous Journey".
             
-            If these events modify the player's health, stats, or inventory those changes are appended to the output as a bullet list in the form "subject: <change>"
-            If these events lead the party to a new location, that location is appended to the output in the form "location: <location_name>"
-            Finally, a short summary of the event is appended to the output in the form of "history: <summary>"
+                If these events modify the player's health, stats, or inventory those changes are appended to the output as a bullet list in the form "subject: <change>"
+                If these events lead the party to a new location, that location is appended to the output in the form "location: <location_name>"
+                Finally, a short summary of the event is appended to the output in the form of "history: <summary>"`;
+            }
+
+            let prompt = `${preamble}
             
             A player named ${username} has just performed an action: ${action}${optional_said}.
             
