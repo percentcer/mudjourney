@@ -77,7 +77,9 @@ export async function handle(interaction: APIApplicationCommandInteraction, env:
     let kv = kvmap.get(interaction.channel_id)!;
 
     switch (cmd.name) {
-        // https://discord.com/developers/docs/resources/channel#message-object-message-flags
+        // --------------------------------------------------------------------
+        // action
+        // --------------------------------------------------------------------
         case "a": {
             let options = cmd.options!;
             let action = (options[0] as APIApplicationCommandInteractionDataStringOption).value;
@@ -96,7 +98,8 @@ export async function handle(interaction: APIApplicationCommandInteraction, env:
                 let playerState = await kv.get(interaction.member.user.id) ?? JSON.stringify({ name: "", health: 0.99, hunger: 0.01, despair: 0.01, location: "" });
                 let eventString = await kv.get("events") ?? "[\"our story begins\"]";
                 events = JSON.parse(eventString);
-                preamble = `The following is a vivid accounting of events, as described by a dungeon master of a fantasy roleplaying campaign called "A Long and Treacherous Journey".
+                // todo: string replacement tokens for use in the google doc? e.g. __PLAYER_STATE__, __EVENT_HISTORY__
+                preamble = `The following is a vivid accounting of events, as described by a dungeon master, of a fantasy roleplaying campaign called "A Long and Treacherous Journey".
 
 Each description is followed by the string "---", then the updated state of the player JSON, another "---", and then a short, one-sentence summary of major events (if any).
 
@@ -169,8 +172,10 @@ Events leading up to this: ${events.join(',')}
                 body: JSON.stringify({ content: response })
             });
         }
+        // --------------------------------------------------------------------
+        // journal
+        // --------------------------------------------------------------------
         case 'j': {
-            // todo this should check the corresponding campaign
             await fetch(`${DISCORD_API_ENDPOINT}/webhooks/${interaction.application_id}/${interaction.token}/messages/@original`, {
                 method: 'PATCH',
                 headers: {
@@ -194,14 +199,6 @@ Events leading up to this: ${events.join(',')}
                 },
                 body: JSON.stringify({ content: message, flags: 1 << 6 })
             });
-            // return fetch(`${DISCORD_API_ENDPOINT}/channels/${interaction.channel_id}/messages`, {
-            //     method: 'POST',
-            //     headers: {
-            //         'content-type': 'application/json;charset=UTF-8',
-            //         'authorization': `Bot ${env.DISCORD_BOT_TOKEN}`
-            //     },
-            //     body: JSON.stringify({ content: bulleted.join('\n'), flags: 1 << 6 })
-            // });
         }
         default: break;
     }
