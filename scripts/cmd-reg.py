@@ -44,4 +44,9 @@ json = {
 # For authorization, you can use either your bot token
 headers = {"Authorization": f"Bot {DISCORD_BOT_TOKEN}"}
 
+# delete all old commands 
+result = requests.get(url, headers=headers).json()
+[requests.delete(url + f'/{c["id"]}', headers=headers) for c in result]
+
+# and then regenerate the ones specified in this file
 r = requests.post(url, headers=headers, json=json)
