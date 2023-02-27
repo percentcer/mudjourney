@@ -54,6 +54,13 @@ async function gdoc_preamble(docid: string): Promise<string> {
 }
 
 export async function handle(interaction: APIApplicationCommandInteraction, env: Env): Promise<any> {
+    const kvmap = new Map<string, KVNamespace>([
+        ["1079160854211207208", env.TREACHEROUS],
+        ["1079577609626730576", env.DOC_00],
+        ["1079586450716246066", env.DOC_01],
+        ["1079586472178503721", env.DOC_02],
+    ])
+
     if (!interaction.member) {
         // todo: what interactions don't have a member field?
         return fetch(`${DISCORD_API_ENDPOINT}/webhooks/${interaction.application_id}/${interaction.token}/messages/@original`, {
@@ -67,6 +74,7 @@ export async function handle(interaction: APIApplicationCommandInteraction, env:
 
     const cmd = interaction.data as APIChatInputApplicationCommandInteractionData;
     var username = interaction.member.user.username;
+    let kv = kvmap.get(interaction.channel_id)!;
 
     switch (cmd.name) {
         // https://discord.com/developers/docs/resources/channel#message-object-message-flags
@@ -85,8 +93,8 @@ export async function handle(interaction: APIApplicationCommandInteraction, env:
                 preamble = await gdoc_preamble(docmap.get(interaction.channel_id)!);
             } else {
                 // todo Promise.all
-                let playerState = await env.TREACHEROUS.get(interaction.member.user.id) ?? JSON.stringify({ name: "", health: 0.99, hunger: 0.01, despair: 0.01, location: "" });
-                let eventString = await env.TREACHEROUS.get("events") ?? "[\"our story begins\"]";
+                let playerState = await kv.get(interaction.member.user.id) ?? JSON.stringify({ name: "", health: 0.99, hunger: 0.01, despair: 0.01, location: "" });
+                let eventString = await kv.get("events") ?? "[\"our story begins\"]";
                 events = JSON.parse(eventString);
                 preamble = `The following is a vivid accounting of events, as described by a dungeon master of a fantasy roleplaying campaign called "A Long and Treacherous Journey".
 
@@ -119,7 +127,7 @@ Events leading up to this: ${events.join(',')}
             if (!docmap.has(interaction.channel_id)) {
                 let [description, update, eventSummary] = result.split('---');
                 result = description;
-    
+
                 // try to find something that looks like a json object:
                 const start = update.indexOf('{');
                 let idx = start;
@@ -128,24 +136,24 @@ Events leading up to this: ${events.join(',')}
                     while (count > 0) {
                         idx += 1;
                         let chr = update.charAt(idx);
-                        if (chr === "{") {count += 1;}
-                        if (chr === "}") {count -= 1;}
+                        if (chr === "{") { count += 1; }
+                        if (chr === "}") { count -= 1; }
                     }
-                    
+
                     try {
                         let stringy = update.substring(start, idx + 1);
                         console.log(stringy);
                         let obj = JSON.parse(stringy);
-                        await env.TREACHEROUS.put(interaction.member.user.id, JSON.stringify(obj));
-                    } catch {console.log("failed to parse user json")}
+                        await kv.put(interaction.member.user.id, JSON.stringify(obj));
+                    } catch { console.log("failed to parse user json") }
                 }
-    
+
                 // check to see if we have a new event to append
-                if(eventSummary && eventSummary.trim()) {
+                if (eventSummary && eventSummary.trim()) {
                     let latestEvent = eventSummary.trim();
                     console.log(latestEvent);
                     events.push(latestEvent);
-                    await env.TREACHEROUS.put("events", JSON.stringify(events));
+                    await kv.put("events", JSON.stringify(events));
                 }
             }
 
@@ -168,19 +176,32 @@ Events leading up to this: ${events.join(',')}
                 headers: {
                     'content-type': 'application/json;charset=UTF-8',
                 },
-                body: JSON.stringify({ content: "checking the journal..." })
+                body: JSON.stringify({ content: "Checking the journal..." })
             });
-            let events: string[] = JSON.parse(await env.TREACHEROUS.get('events') ?? "[]");
+            let events: string[] = JSON.parse(await kv.get('events') ?? "[]");
+            let message = "Checking the journal..."
             let recent = events.slice(-5);
-            let bulleted = recent.map(v => `* ${v}`);
-            return fetch(`${DISCORD_API_ENDPOINT}/channels/${interaction.channel_id}/messages`, {
-                method: 'POST',
+            if (recent.length > 0) {
+                let bulleted = recent.map(v => `* ${v}`);
+                message = `${message}\n${bulleted.join('\n')}`;
+            } else {
+                message = `${message} but no entries were found!`;
+            }
+            return fetch(`${DISCORD_API_ENDPOINT}/webhooks/${interaction.application_id}/${interaction.token}/messages/@original`, {
+                method: 'PATCH',
                 headers: {
                     'content-type': 'application/json;charset=UTF-8',
-                    'authorization': `Bot ${env.DISCORD_BOT_TOKEN}`
                 },
-                body: JSON.stringify({ content:  bulleted.join('\n'), flags: 1 << 6})
+                body: JSON.stringify({ content: message, flags: 1 << 6 })
             });
+            // return fetch(`${DISCORD_API_ENDPOINT}/channels/${interaction.channel_id}/messages`, {
+            //     method: 'POST',
+            //     headers: {
+            //         'content-type': 'application/json;charset=UTF-8',
+            //         'authorization': `Bot ${env.DISCORD_BOT_TOKEN}`
+            //     },
+            //     body: JSON.stringify({ content: bulleted.join('\n'), flags: 1 << 6 })
+            // });
         }
         default: break;
     }

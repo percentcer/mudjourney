@@ -1,4 +1,9 @@
 name = "mudjourney"
 main = "src/index.ts"
 compatibility_date = "2023-02-23"
-kv_namespaces = [{ binding = "TREACHEROUS", id = "ef62b680a6274ef49ab5435758fc722c" }]
+kv_namespaces = [
+    { binding = "TREACHEROUS", id = "ef62b680a6274ef49ab5435758fc722c" },
+    { binding = "DOC_00", id = "41ebe7bfe3ee45b3abedc1e4f7bb7f47" },
+    { binding = "DOC_01", id = "b02bfa352322461e9714afee78e9404c" },
+    { binding = "DOC_02", id = "6e5c2d8218364a349da7013b604473e3" },
+]
