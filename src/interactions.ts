@@ -23,7 +23,7 @@ async function oai_complete(prompt: string, key: string) {
             prompt: prompt,
             max_tokens: 256,
             model: "text-davinci-003",
-            temperature: 0,
+            temperature: 0.8,
         })
     };
     const response = await fetch(url, options);
@@ -47,23 +47,28 @@ export async function handle(interaction: APIApplicationCommandInteraction, env:
 
     switch (cmd.name) {
         // https://discord.com/developers/docs/resources/channel#message-object-message-flags
-        case "say": {
-            let options = cmd.options;
-            let first = options![0] as APIApplicationCommandInteractionDataStringOption;
-            let said = first.value;
+        case "a": {
+            let options = cmd.options!;
+            let action = (options[0] as APIApplicationCommandInteractionDataStringOption).value;
+            let said = options.length > 1 ? (options[1] as APIApplicationCommandInteractionDataStringOption).value : "";
+            let optional_said = options.length > 1 ? ` and said "${said}" while doing so` : "";
             let prompt = `
-            Please complete the following as if you were the DM of a roleplaying campaign set in a fantasy world. 
+            The following is a description of events, as described by a dungeon master, in a fantasy roleplaying campaign called "A Long and Treacherous Journey".
             
-            The players will describe their actions and you will describe the events that follow, including changes to the environment and reactions from other characters.
+            If these events modify the player's health, stats, or inventory those changes are appended to the output as a bullet list in the form "subject: <change>"
+            If these events lead the party to a new location, that location is appended to the output in the form "location: <location_name>"
+            Finally, a short summary of the event is appended to the output in the form of "history: <summary>"
             
-            A player just said: "${said}".`
+            A player named ${username} has just performed an action: ${action}${optional_said}.
+            
+            DM: `
             const completion = await oai_complete(prompt, env.OPENAI_SECRET) as {
                 choices: [
                     { text: string }
                 ]
             };
 
-            let response = `${username} says, "${said}".
+            let response = `${username}: [${action}] ${said ? `"${said}"` : ""}
             ${completion.choices[0].text}`;
 
             // todo: it's interesting that we can do a whole host of behaviors here, not just editing the pending response (e.g. create chat channels, append emoji, change player names, etc)

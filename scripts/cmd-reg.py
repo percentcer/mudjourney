@@ -22,15 +22,21 @@ T_STRING = 3
 
 # https://discord.com/developers/docs/interactions/application-commands#slash-commands-example-slash-command
 json = {
-    "name": "say",
+    "name": "a",
     "type": CHAT_INPUT,
-    "description": "Speak friend, and enter",
+    "description": "Perform an action.",
     "options": [
         {
             "name": "what",
-            "description": "What the player says",
+            "description": "Description of your action, e.g. \"Jump over the candlestick\"",
             "type": T_STRING,
             "required": True,
+        },
+        {
+            "name": "say",
+            "description": "What you say while you're doing it, e.g. \"Here goes nothin'!\"",
+            "type": T_STRING,
+            "required": False,
         }
     ],
 }
