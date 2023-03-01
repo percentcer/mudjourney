@@ -35,6 +35,27 @@ async function oai_complete(prompt: string, key: string) {
     return await response.json();
 }
 
+type OAIChatMessage = { "role": "system" | "user" | "assistant", "content": string }
+type OAIChatUsage = { "prompt_tokens": number, "completion_tokens": number, "total_tokens": number };
+type OAIChatChoice = { "message": OAIChatMessage, "finish_reason": string, "index": number }
+type OAIChatCompletion = { "id": string, "object": string, "created": number, "model": string, "usage": OAIChatUsage, "choices": OAIChatChoice[] }
+async function oai_chat(messages: OAIChatMessage[], key: string): Promise<OAIChatCompletion> {
+    const url = "https://api.openai.com/v1/chat/completions";
+    const options = {
+        method: "POST",
+        headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${key}`
+        },
+        body: JSON.stringify({
+            messages,
+            model: "gpt-3.5-turbo"
+        })
+    };
+    const response = await fetch(url, options);
+    return await response.json();
+}
+
 async function gdoc_preamble(docid: string): Promise<string> {
     // for easy testing just edit this google doc link
     const url = `https://docs.google.com/document/d/${docid}/export?format=txt`;
@@ -90,74 +111,42 @@ export async function handle(interaction: APIApplicationCommandInteraction, env:
             // pre-completion
             // -------------------------------------------------------------------------------
             let preamble;
-            let events: string[] = []
+            // let events: string[] = [];
+            let result: string;
             if (docmap.has(interaction.channel_id)) {
                 preamble = await gdoc_preamble(docmap.get(interaction.channel_id)!);
+                let prompt = `${preamble}
+                
+                A player named ${username} has just performed an action: ${action}${optional_said}.
+                
+                DM: `
+                // -------------------------------------------------------------------------------
+                // completion
+                // -------------------------------------------------------------------------------
+                const completion = await oai_complete(prompt, env.OPENAI_SECRET) as {
+                    choices: [
+                        { text: string }
+                    ]
+                };
+                result = completion.choices[0].text.trim();
             } else {
-                // todo Promise.all
-                let playerState = await kv.get(interaction.member.user.id) ?? JSON.stringify({ name: "", health: 0.99, hunger: 0.01, despair: 0.01, location: "" });
-                let eventString = await kv.get("events") ?? "[\"our story begins\"]";
-                events = JSON.parse(eventString);
-                // todo: string replacement tokens for use in the google doc? e.g. __PLAYER_STATE__, __EVENT_HISTORY__
-                preamble = `The following is a vivid accounting of events, as described by a dungeon master, of a fantasy roleplaying campaign called "A Long and Treacherous Journey".
-
-Each description is followed by the string "---", then the updated state of the player JSON, another "---", and then a short, one-sentence summary of major events (if any).
-
-The previous state of the player was: ${playerState}
-
-Events leading up to this: ${events.join(',')}
-`;
-            }
-
-            // -------------------------------------------------------------------------------
-            // completion
-            // -------------------------------------------------------------------------------
-            let prompt = `${preamble}
-            
-            A player named ${username} has just performed an action: ${action}${optional_said}.
-            
-            DM: `
-            const completion = await oai_complete(prompt, env.OPENAI_SECRET) as {
-                choices: [
-                    { text: string }
-                ]
-            };
-            let result = completion.choices[0].text.trim();
-
-            // -------------------------------------------------------------------------------
-            // post-completion
-            // -------------------------------------------------------------------------------
-            if (!docmap.has(interaction.channel_id)) {
-                let [description, update, eventSummary] = result.split('---');
-                result = description;
-
-                // try to find something that looks like a json object:
-                const start = update.indexOf('{');
-                let idx = start;
-                if (idx > -1) {
-                    let count = 1;
-                    while (count > 0) {
-                        idx += 1;
-                        let chr = update.charAt(idx);
-                        if (chr === "{") { count += 1; }
-                        if (chr === "}") { count -= 1; }
-                    }
-
-                    try {
-                        let stringy = update.substring(start, idx + 1);
-                        console.log(stringy);
-                        let obj = JSON.parse(stringy);
-                        await kv.put(interaction.member.user.id, JSON.stringify(obj));
-                    } catch { console.log("failed to parse user json") }
+                let historyString = await kv.get("events");
+                let history: OAIChatMessage[];
+                if (historyString !== null) {
+                    history = JSON.parse(historyString);
+                } else {
+                    let systemDescription = `You are the dungeon master of a fantasy roleplaying game called "A Long and Treacherous Journey". Players will send you their actions and you will respond with a description of how the environment changed as a result. This can include physical changes to the environment, physical changes to the player characters, and reactions from non-player characters. Player characters are not precious, it is acceptable for them to get wounded or even killed off. In such an event, a new character should be introduce for the player to control.`
+                    let start: OAIChatMessage = { "role": "system", "content": systemDescription };
+                    history = [start];
                 }
-
-                // check to see if we have a new event to append
-                if (eventSummary && eventSummary.trim()) {
-                    let latestEvent = eventSummary.trim();
-                    console.log(latestEvent);
-                    events.push(latestEvent);
-                    await kv.put("events", JSON.stringify(events));
-                }
+                history.push({ "role": "user", "content": `${action}${said.length > 0 ? `, "${said}"` : ""}` });
+                // -------------------------------------------------------------------------------
+                // completion
+                // -------------------------------------------------------------------------------
+                const completion = await oai_chat(history, env.OPENAI_SECRET);
+                history.push(completion.choices[0].message);
+                await kv.put("events", JSON.stringify(history));
+                result = history[history.length - 1].content;
             }
 
             let response = `${username}: [${action}] ${said ? `"${said}"` : ""}
@@ -183,11 +172,12 @@ Events leading up to this: ${events.join(',')}
                 },
                 body: JSON.stringify({ content: "Checking the journal..." })
             });
-            let events: string[] = JSON.parse(await kv.get('events') ?? "[]");
+            let events: OAIChatMessage[] = JSON.parse(await kv.get('events') ?? "[]");
             let message = "Checking the journal..."
             let recent = events.slice(-5);
             if (recent.length > 0) {
-                let bulleted = recent.map(v => `* ${v}`);
+                let filtered = recent.filter(v => v.role === "assistant");
+                let bulleted = filtered.map(v => `* ${v.content}`);
                 message = `${message}\n${bulleted.join('\n')}`;
             } else {
                 message = `${message} but no entries were found!`;
