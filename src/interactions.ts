@@ -153,7 +153,7 @@ export async function handle(interaction: APIApplicationCommandInteraction, env:
                         campaignData = { name: "A long and treacherous journey", short_description: "A long and treacherous journey", full_description: "A long and treacherous journey" };
                     }
                     // let systemDescription = `You are the dungeon master of a fantasy roleplaying game called "A Long and Treacherous Journey". Players will send you their actions and you will respond with a description of how the environment changed as a result. This can include physical changes to the environment, physical changes to the player characters, and reactions from non-player characters. Player characters are not precious, it is acceptable for them to get wounded or even killed off. In such an event, a new character should be introduce for the player to control.`
-                    let systemDescription = `You are the dungeon master of a fantasy roleplaying game with the following description: ${campaignData.short_description} Players will send you their actions and you will respond with a description of what happens next.`
+                    let systemDescription = `You are the dungeon master of a highly interactive roleplaying game with the following description: "${campaignData.short_description}" Players will send you their actions and you will respond with a description of what happens next. Your decisions can be tough, but do not feel unfair.`
                     let start: OAIChatMessage = { role: "system", content: systemDescription };
                     history = [start];
                 }
@@ -242,21 +242,33 @@ export async function handle(interaction: APIApplicationCommandInteraction, env:
                 body: JSON.stringify({
                     name: campaignData.name,
                     type: 0, // text
-                    topic: campaignData.full_description.substring(0, 1024),
-                    parent_id: categoryCampaigns?.id
+                    topic: campaignData.short_description,
+                    parent_id: categoryCampaigns?.id,
+                    position: 0
                 })
             });
-
             let channel = await channelCreation.json() as APITextChannel;
-            await env.TREACHEROUS.put(`${channel.id}.campaign`, campaignString);
 
-            return fetch(`${DISCORD_API_ENDPOINT}/webhooks/${interaction.application_id}/${interaction.token}/messages/@original`, {
-                method: 'PATCH',
-                headers: {
-                    'content-type': 'application/json;charset=UTF-8',
-                },
-                body: JSON.stringify({ content: `new campaign created! ${campaignData.short_description} <#${channel.id}>`, flags: 1 << 6 })
-            });
+            return Promise.all([
+                env.TREACHEROUS.put(`${channel.id}.campaign`, campaignString),
+                fetch(`${DISCORD_API_ENDPOINT}/channels/${channel.id}/messages`, {
+                    method: "POST",
+                    headers: {
+                        'content-type': 'application/json;charset=UTF-8',
+                        Authorization: `Bot ${env.DISCORD_BOT_TOKEN}`
+                    },
+                    body: JSON.stringify({
+                        content: campaignData.full_description.substring(0, 2000)
+                    })
+                }),
+                fetch(`${DISCORD_API_ENDPOINT}/webhooks/${interaction.application_id}/${interaction.token}/messages/@original`, {
+                    method: 'PATCH',
+                    headers: {
+                        'content-type': 'application/json;charset=UTF-8',
+                    },
+                    body: JSON.stringify({ content: `<#${channel.id}> ${campaignData.short_description}`, flags: 1 << 6 })
+                }),
+            ])
         }
         default: break;
     }
