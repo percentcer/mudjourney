@@ -48,7 +48,27 @@ async function oai_chat(messages: OAIChatMessage[], key: string): Promise<OAICha
         })
     };
     const response = await fetch(url, options);
-    return await response.json();
+    return response.json();
+}
+
+type OAIImageData = { url: string }
+type OAIImageGenerationResponse = { created: number, data: OAIImageData[] }
+
+async function oai_image(prompt: string, key: string): Promise<OAIImageGenerationResponse> {
+    const url = "https://api.openai.com/v1/images/generations";
+    const options = {
+        method: "POST",
+        headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${key}`
+        },
+        body: JSON.stringify({
+            prompt,
+            size: "256x256"
+        })
+    };
+    const response = await fetch(url, options);
+    return response.json();
 }
 
 type CampaignDescription = { name: string, full_description: string, short_description: string };
