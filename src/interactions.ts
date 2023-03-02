@@ -2,9 +2,6 @@ import {
     APIApplicationCommandInteraction,
     APIChatInputApplicationCommandInteractionData,
     APIApplicationCommandInteractionDataStringOption,
-    ChannelType,
-    TextChannelType,
-    APIGuildTextChannel,
     APITextChannel,
     APIChannel,
 } from 'discord-api-types/v10';
@@ -13,13 +10,6 @@ import { Env } from '.'
 
 // discord stuff
 const DISCORD_API_ENDPOINT = "https://discord.com/api/v10";
-
-// google doc shortcut testing
-const docmap = new Map<string, string>([
-    ["1079577609626730576", "1BlIKPpwyRWTVaJwnx4JgIyjTuVJTpG7qNruOssEaB3U"], // 00
-    ["1079586450716246066", "1IL8pC54CZLJ-xHGE_W-KGOaH8HXPg37JZESN2r9atcU"], // 01
-    ["1079586472178503721", "1CoWxwrd7QgdUAK5k3LI0T-rnYdN6A3ZG-Z7KPVHnlAI"], // 02
-]);
 
 async function oai_complete(prompt: string, key: string) {
     const url = 'https://api.openai.com/v1/completions';
@@ -61,34 +51,9 @@ async function oai_chat(messages: OAIChatMessage[], key: string): Promise<OAICha
     return await response.json();
 }
 
-async function gdoc_preamble(docid: string): Promise<string> {
-    // for easy testing just edit this google doc link
-    const url = `https://docs.google.com/document/d/${docid}/export?format=txt`;
-    // ------------------------------------------------------------------------
-    const response = await fetch(url, {
-        headers: {
-            "content-type": "application/json;charset=UTF-8",
-        },
-    });
-    const { headers } = response;
-    const contentType = headers.get("content-type") || ""
-    if (contentType.includes("application/json")) {
-        return JSON.stringify(await response.json())
-    } else {
-        return response.text();
-    }
-}
-
 type CampaignDescription = { name: string, full_description: string, short_description: string };
 
 export async function handle(interaction: APIApplicationCommandInteraction, env: Env): Promise<any> {
-    const kvmap = new Map<string, KVNamespace>([
-        ["1079160854211207208", env.TREACHEROUS],
-        ["1079577609626730576", env.DOC_00],
-        ["1079586450716246066", env.DOC_01],
-        ["1079586472178503721", env.DOC_02],
-    ])
-
     if (!interaction.member) {
         // todo: what interactions don't have a member field?
         return fetch(`${DISCORD_API_ENDPOINT}/webhooks/${interaction.application_id}/${interaction.token}/messages/@original`, {
@@ -102,7 +67,6 @@ export async function handle(interaction: APIApplicationCommandInteraction, env:
 
     const cmd = interaction.data as APIChatInputApplicationCommandInteractionData;
     var username = interaction.member.user.username;
-    // let kv = kvmap.get(interaction.channel_id)!;
 
     switch (cmd.name) {
         // --------------------------------------------------------------------
@@ -117,57 +81,39 @@ export async function handle(interaction: APIApplicationCommandInteraction, env:
             // -------------------------------------------------------------------------------
             // pre-completion
             // -------------------------------------------------------------------------------
-            let preamble;
-            // let events: string[] = [];
             let result: string;
-            if (docmap.has(interaction.channel_id)) {
-                preamble = await gdoc_preamble(docmap.get(interaction.channel_id)!);
-                let prompt = `${preamble}
-                
-                A player named ${username} has just performed an action: ${action}${optional_said}.
-                
-                DM: `
-                // -------------------------------------------------------------------------------
-                // completion
-                // -------------------------------------------------------------------------------
-                const completion = await oai_complete(prompt, env.OPENAI_SECRET) as {
-                    choices: [
-                        { text: string }
-                    ]
-                };
-                result = completion.choices[0].text.trim();
+            let kv = env.TREACHEROUS;
+            let historyString = await kv.get(`${interaction.channel_id}.events`);
+
+            let history: OAIChatMessage[];
+            if (historyString !== null) {
+                history = JSON.parse(historyString);
             } else {
-                let kv = env.TREACHEROUS;
-                let historyString = await kv.get(`${interaction.channel_id}.events`);
-
-                let history: OAIChatMessage[];
-                if (historyString !== null) {
-                    history = JSON.parse(historyString);
+                // get the pre-seeded campaign description
+                let campaignString = await kv.get(`${interaction.channel_id}.campaign`);
+                let campaignData: CampaignDescription;
+                if (campaignString !== null) {
+                    campaignData = JSON.parse(campaignString);
                 } else {
-                    // get the pre-seeded campaign description
-                    let campaignString = await kv.get(`${interaction.channel_id}.campaign`);
-                    let campaignData: CampaignDescription;
-                    if (campaignString !== null) {
-                        campaignData = JSON.parse(campaignString);
-                    } else {
-                        campaignData = { name: "A long and treacherous journey", short_description: "A long and treacherous journey", full_description: "A long and treacherous journey" };
-                    }
-                    // let systemDescription = `You are the dungeon master of a fantasy roleplaying game called "A Long and Treacherous Journey". Players will send you their actions and you will respond with a description of how the environment changed as a result. This can include physical changes to the environment, physical changes to the player characters, and reactions from non-player characters. Player characters are not precious, it is acceptable for them to get wounded or even killed off. In such an event, a new character should be introduce for the player to control.`
-                    let systemDescription = `You are the dungeon master of a highly interactive roleplaying game with the following description: "${campaignData.short_description}" Players will send you their actions and you will respond with a description of what happens next. Your decisions can be tough, but do not feel unfair.`
-                    let start: OAIChatMessage = { role: "system", content: systemDescription };
-                    history = [start];
+                    campaignData = { name: "A long and treacherous journey", short_description: "A long and treacherous journey", full_description: "A long and treacherous journey" };
                 }
-
-                history.push({ role: "user", content: `${username}: ${action}${said.length > 0 ? `, "${said}"` : ""}` });
-                // -------------------------------------------------------------------------------
-                // completion
-                // -------------------------------------------------------------------------------
-                const completion = await oai_chat(history, env.OPENAI_SECRET);
-                console.log(`tokens: ${completion.usage.total_tokens}`);
-                history.push(completion.choices[0].message);
-                await kv.put(`${interaction.channel_id}.events`, JSON.stringify(history));
-                result = history[history.length - 1].content;
+                // let systemDescription = `You are the dungeon master of a fantasy roleplaying game called "A Long and Treacherous Journey". Players will send you their actions and you will respond with a description of how the environment changed as a result. This can include physical changes to the environment, physical changes to the player characters, and reactions from non-player characters. Player characters are not precious, it is acceptable for them to get wounded or even killed off. In such an event, a new character should be introduce for the player to control.`
+                let systemDescription = `You are the dungeon master of a highly interactive roleplaying game with the following description: "${campaignData.short_description}" Players will send you their actions and you will respond with a description of what happens next. Your decisions can be tough, but do not feel unfair.`
+                let start: OAIChatMessage = { role: "system", content: systemDescription };
+                history = [start];
             }
+
+            history.push({ role: "user", content: `${username}: ${action}${said.length > 0 ? `, "${said}"` : ""}` });
+
+            // -------------------------------------------------------------------------------
+            // completion
+            // -------------------------------------------------------------------------------
+            const completion = await oai_chat(history, env.OPENAI_SECRET);
+            console.log(`tokens: ${completion.usage.total_tokens}`);
+            history.push(completion.choices[0].message);
+            await kv.put(`${interaction.channel_id}.events`, JSON.stringify(history));
+            result = history[history.length - 1].content;
+
 
             let response = `${username}: [${action}] ${said ? `"${said}"` : ""}
             ${result}`;
