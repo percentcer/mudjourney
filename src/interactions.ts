@@ -76,7 +76,6 @@ export async function handle(interaction: APIApplicationCommandInteraction, env:
             let options = cmd.options!;
             let action = (options[0] as APIApplicationCommandInteractionDataStringOption).value;
             let said = options.length > 1 ? (options[1] as APIApplicationCommandInteractionDataStringOption).value : "";
-            let optional_said = options.length > 1 ? ` and said "${said}" while doing so` : "";
 
             // -------------------------------------------------------------------------------
             // pre-completion
