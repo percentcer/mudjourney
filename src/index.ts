@@ -7,6 +7,10 @@
  *
  * Learn more at https://developers.cloudflare.com/workers/
  */
+
+// bot invite
+// https://discord.com/api/oauth2/authorize?client_id=1078189688533291070&permissions=328566156368&scope=bot%20applications.commands
+
 import {
 	APIInteraction,
 	APIApplicationCommandInteraction,
