@@ -31,9 +31,6 @@ const public_key_bytes = new Uint8Array(hexToBytes(public_key));
 
 export interface Env {
 	TREACHEROUS: KVNamespace;
-	DOC_00: KVNamespace;
-	DOC_01: KVNamespace;
-	DOC_02: KVNamespace;
 	
 	// Example binding to Durable Object. Learn more at https://developers.cloudflare.com/workers/runtime-apis/durable-objects/
 	// MY_DURABLE_OBJECT: DurableObjectNamespace;
