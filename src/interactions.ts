@@ -4,6 +4,9 @@ import {
     APIApplicationCommandInteractionDataStringOption,
     APITextChannel,
     APIChannel,
+    APIGuildCategoryChannel,
+    ChannelType,
+    APIGuild,
 } from 'discord-api-types/v10';
 
 import { Env } from '.'
@@ -196,7 +199,26 @@ export async function handle(interaction: APIApplicationCommandInteraction, env:
                     Authorization: `Bot ${env.DISCORD_BOT_TOKEN}`
                 }
             })).json();
-            let categoryCampaigns = channelList.find(v => v.name?.toLowerCase() === 'campaigns');
+
+            // categories can only hold 50
+            let childCount = new Map<string, number>();
+            channelList.forEach((v: APIChannel) => {
+                if (v.type === ChannelType.GuildText) {
+                    let test = (v as APITextChannel).parent_id ?? "0";
+                    let update = childCount.get(test);
+                    if (update === undefined) {
+                        childCount.set(test, 1);
+                    } else {
+                        childCount.set(test, update + 1);
+                    }
+                }
+            });
+
+            let categoryCampaigns: APIGuildCategoryChannel | null = channelList.find(v => v.name?.toLowerCase() === 'campaigns') as APIGuildCategoryChannel;
+            if (categoryCampaigns && childCount.get(categoryCampaigns.id) === 50) {
+                // todo: create new category
+                categoryCampaigns = null;
+            }
 
             let channelCreation = await fetch(`${DISCORD_API_ENDPOINT}/guilds/${interaction.guild_id}/channels`, {
                 method: "POST",
