@@ -233,7 +233,7 @@ export async function handle(interaction: APIApplicationCommandInteraction, env:
             // tokens are not-quite words and the average word length in english is 4.6 characters, so, uh...
             if (hack_fakeTokenCount / (4096 * 4) > 0.8) {
                 // compress history
-                let summaryRequest = await oai_chat(history.concat([{ role: "user", content: "please print a summary of the story so far, starting with \"Our story so far:\"" }]), env.OPENAI_SECRET);
+                let summaryRequest = await oai_chat(history.concat([{ role: "user", content: "Please print a summary of the story so far." }]), env.OPENAI_SECRET);
                 console.log(`nearing context limit, requested summary: ${summaryRequest.choices[0].message.content}`);
                 ctx.waitUntil(
                     fetch(`${DISCORD_API_ENDPOINT}/channels/${interaction.channel_id}/messages`, {
@@ -277,7 +277,7 @@ export async function handle(interaction: APIApplicationCommandInteraction, env:
             let historyString = await kv.get(`${interaction.channel_id}.events`);
             let history: OAIChatMessage[];
             history = JSON.parse(historyString!);
-            let summaryRequest = await oai_chat_streaming(history.concat([{ role: "user", content: "Please print a summary of the story so far, starting with \"Our story so far:\". Do not say \"sure\" or anything like that, just print the summary." }]), stub, patchURL, env.OPENAI_SECRET);
+            let summaryRequest = await oai_chat_streaming(history.concat([{ role: "user", content: `Please print a summary of the story so far from the perspective of <@${interaction.member.user.id}>` }]), stub, patchURL, env.OPENAI_SECRET);
         }
         // --------------------------------------------------------------------
         // new-campaign
