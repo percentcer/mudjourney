@@ -233,7 +233,7 @@ export async function handle(interaction: APIApplicationCommandInteraction, env:
             // tokens are not-quite words and the average word length in english is 4.6 characters, so, uh...
             if (hack_fakeTokenCount / (4096 * 4) > 0.8) {
                 // compress history
-                let summaryRequest = await oai_chat(history.concat([{ role: "user", content: "print a summary of the story so far" }]), env.OPENAI_SECRET);
+                let summaryRequest = await oai_chat(history.concat([{ role: "user", content: "please print a summary of the story so far, starting with \"Our story so far:\"" }]), env.OPENAI_SECRET);
                 console.log(`nearing context limit, requested summary: ${summaryRequest.choices[0].message.content}`);
                 ctx.waitUntil(
                     fetch(`${DISCORD_API_ENDPOINT}/channels/${interaction.channel_id}/messages`, {
