@@ -53,6 +53,82 @@ async function oai_chat(messages: OAIChatMessage[], key: string): Promise<OAICha
     const response = await fetch(url, options);
     return response.json();
 }
+// `${DISCORD_API_ENDPOINT}/webhooks/${interaction.application_id}/${interaction.token}/messages/@original`
+async function oai_chat_streaming(messages: OAIChatMessage[], stub: string, patchURL: string, key: string): Promise<OAIChatMessage> {
+    const url = "https://api.openai.com/v1/chat/completions";
+    const options = {
+        method: "POST",
+        headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${key}`
+        },
+        body: JSON.stringify({
+            messages,
+            model: "gpt-3.5-turbo",
+            stream: true
+        })
+    };
+    return new Promise<OAIChatMessage>(async (resolve, reject) => {
+        const response = await fetch(url, options);
+        const reader = response.body!.getReader();
+        const decoder = new TextDecoder();
+        const stream = new ReadableStream({
+            start(controller) {
+                let committed: string = "";
+                let updated: string = "";
+                let chunk: string;
+                // const interval = setInterval(() => , 1000);
+                return pump();
+                function pump(): any {
+                    return reader.read().then(async ({ done, value }) => {
+                        // When no more data needs to be consumed, close the stream
+                        if (done) {
+                            controller.close();
+                            await fetch(patchURL, {
+                                method: 'PATCH',
+                                headers: {
+                                    'content-type': 'application/json;charset=UTF-8',
+                                },
+                                body: JSON.stringify({ content: `${stub}\n${updated}` })
+                            })
+                            resolve({ role: "assistant", content: updated });
+                            return;
+                        }
+
+                        let sliceStart;
+                        let bit = decoder.decode(value);
+                        chunk += bit;
+                        for (const m of chunk.matchAll(/data: ({.*})/g)) {
+                            const dat = JSON.parse(m[1]);
+                            const delta = dat.choices[0].delta;
+                            if (delta.content) {
+                                updated += delta.content;
+                            }
+                            console.log(dat.choices[0].delta);
+                            sliceStart = m.index! + m[0].length;
+                        }
+                        if (updated.length - committed.length > 64) {
+                            await fetch(patchURL, {
+                                method: 'PATCH',
+                                headers: {
+                                    'content-type': 'application/json;charset=UTF-8',
+                                },
+                                body: JSON.stringify({ content: `${stub}\n${updated}` })
+                            });
+                            committed = updated;
+                        }
+                        chunk = chunk.slice(sliceStart).trim();
+                        // console.log(`remaining chunk: ${chunk}`);
+
+                        // Enqueue the next data chunk into our target stream
+                        controller.enqueue(value);
+                        return pump();
+                    });
+                }
+            },
+        });
+    });
+}
 
 type OAIImageData = { url: string }
 type OAIImageGenerationResponse = { created: number, data: OAIImageData[] }
@@ -76,10 +152,11 @@ async function oai_image(prompt: string, key: string): Promise<OAIImageGeneratio
 
 type CampaignDescription = { name: string, full_description: string, short_description: string };
 
-export async function handle(interaction: APIApplicationCommandInteraction, env: Env): Promise<any> {
+export async function handle(interaction: APIApplicationCommandInteraction, env: Env, ctx: ExecutionContext): Promise<any> {
+    const patchURL = `${DISCORD_API_ENDPOINT}/webhooks/${interaction.application_id}/${interaction.token}/messages/@original`;
     if (!interaction.member) {
         // todo: what interactions don't have a member field?
-        return fetch(`${DISCORD_API_ENDPOINT}/webhooks/${interaction.application_id}/${interaction.token}/messages/@original`, {
+        return fetch(patchURL, {
             method: 'PATCH',
             headers: {
                 'content-type': 'application/json;charset=UTF-8',
@@ -100,7 +177,7 @@ export async function handle(interaction: APIApplicationCommandInteraction, env:
             let said = options.length > 1 ? (options[1] as APIApplicationCommandInteractionDataStringOption).value : "";
 
             const stub = `<@${interaction.member.user.id}>: [${action}] ${said ? `"${said}"` : ""}`
-            await fetch(`${DISCORD_API_ENDPOINT}/webhooks/${interaction.application_id}/${interaction.token}/messages/@original`, {
+            await fetch(patchURL, {
                 method: 'PATCH',
                 headers: {
                     'content-type': 'application/json;charset=UTF-8',
@@ -143,15 +220,20 @@ export async function handle(interaction: APIApplicationCommandInteraction, env:
             // -------------------------------------------------------------------------------
             // completion
             // -------------------------------------------------------------------------------
-            const completion = await oai_chat(history, env.OPENAI_SECRET);
-            console.log(`tokens: ${completion.usage.total_tokens}`);
-            history.push(completion.choices[0].message);
-            
-            result = history[history.length - 1].content;
+            // const completion = await oai_chat(history, env.OPENAI_SECRET);
+            let completion = await oai_chat_streaming(history, stub, patchURL, env.OPENAI_SECRET);
+            // console.log(`tokens: ${completion.usage.total_tokens}`);
+            history.push(completion);
 
-            if (completion.usage.total_tokens / 4096 > 0.8) {
+            result = history[history.length - 1].content;
+            const hack_fakeTokenCount = history.reduce<number>((acc, msg, idx, arr) => { return acc + msg.content.length }, 0);
+
+            // if (completion.usage.total_tokens / 4096 > 0.8) {
+            // hack due to hard-to-get token count from streaming calls
+            // tokens are not-quite words and the average word length in english is 4.6 characters, so, uh...
+            if (hack_fakeTokenCount / (4096 * 4) > 0.8) {
                 // compress history
-                let summaryRequest = await oai_chat(history.concat([{role: "user", content: "please summarize the story so far"}]), env.OPENAI_SECRET);
+                let summaryRequest = await oai_chat(history.concat([{ role: "user", content: "please summarize the story so far" }]), env.OPENAI_SECRET);
                 history = [history[0]].concat(summaryRequest.choices[0].message);
             }
             await kv.put(`${interaction.channel_id}.events`, JSON.stringify(history));
@@ -159,7 +241,7 @@ export async function handle(interaction: APIApplicationCommandInteraction, env:
             let response = `${stub}\n${result}`;
 
             // todo: it's interesting that we can do a whole host of behaviors here, not just editing the pending response (e.g. create chat channels, append emoji, change player names, etc)
-            return fetch(`${DISCORD_API_ENDPOINT}/webhooks/${interaction.application_id}/${interaction.token}/messages/@original`, {
+            return fetch(patchURL, {
                 method: 'PATCH',
                 headers: {
                     'content-type': 'application/json;charset=UTF-8',
@@ -171,7 +253,12 @@ export async function handle(interaction: APIApplicationCommandInteraction, env:
         // journal
         // --------------------------------------------------------------------
         case 'j': {
-            await fetch(`${DISCORD_API_ENDPOINT}/webhooks/${interaction.application_id}/${interaction.token}/messages/@original`, {
+            // let kv = env.TREACHEROUS;
+            // let historyString = await kv.get(`${interaction.channel_id}.events`);
+            // let history: OAIChatMessage[];
+            // history = JSON.parse(historyString!);
+            // 
+            await fetch(patchURL, {
                 method: 'PATCH',
                 headers: {
                     'content-type': 'application/json;charset=UTF-8',
@@ -188,7 +275,7 @@ export async function handle(interaction: APIApplicationCommandInteraction, env:
             } else {
                 message = `${message} but no entries were found!`;
             }
-            return fetch(`${DISCORD_API_ENDPOINT}/webhooks/${interaction.application_id}/${interaction.token}/messages/@original`, {
+            return fetch(patchURL, {
                 method: 'PATCH',
                 headers: {
                     'content-type': 'application/json;charset=UTF-8',
@@ -205,8 +292,8 @@ export async function handle(interaction: APIApplicationCommandInteraction, env:
             let system: OAIChatMessage = { role: "system", content: "You are the designer of pen and paper roleplaying games. Users will ask you for a campaign about a topic, and you will generate the name and description of this campaign. Output should be in JSON format, with three fields: \"name\", \"full_description\", and \"short_description\"" }
             let userRequest: OAIChatMessage = { role: "user", "content": campaignUserDescription };
             const stub = `Generating a new campaign about: "_${campaignUserDescription}_"`;
-            
-            await fetch(`${DISCORD_API_ENDPOINT}/webhooks/${interaction.application_id}/${interaction.token}/messages/@original`, {
+
+            await fetch(patchURL, {
                 method: 'PATCH',
                 headers: {
                     'content-type': 'application/json;charset=UTF-8',

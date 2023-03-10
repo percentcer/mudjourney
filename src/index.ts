@@ -94,7 +94,7 @@ export default {
 		// --------------------------------------------------------------------
 		//  respond
 		// --------------------------------------------------------------------
-		ctx.waitUntil(handle(interaction as APIApplicationCommandInteraction, env));
+		ctx.waitUntil(handle(interaction as APIApplicationCommandInteraction, env, ctx));
 		return new Response(JSON.stringify({
 			type: InteractionResponseType.DeferredChannelMessageWithSource
 		}), {
