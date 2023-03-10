@@ -100,6 +100,15 @@ export async function handle(interaction: APIApplicationCommandInteraction, env:
             let action = (options[0] as APIApplicationCommandInteractionDataStringOption).value;
             let said = options.length > 1 ? (options[1] as APIApplicationCommandInteractionDataStringOption).value : "";
 
+            const stub = `<@${interaction.member.user.id}>: [${action}] ${said ? `"${said}"` : ""}`
+            await fetch(`${DISCORD_API_ENDPOINT}/webhooks/${interaction.application_id}/${interaction.token}/messages/@original`, {
+                method: 'PATCH',
+                headers: {
+                    'content-type': 'application/json;charset=UTF-8',
+                },
+                body: JSON.stringify({ content: stub })
+            });
+
             // -------------------------------------------------------------------------------
             // pre-completion
             // -------------------------------------------------------------------------------
@@ -125,7 +134,7 @@ export async function handle(interaction: APIApplicationCommandInteraction, env:
                 history = [start];
             }
 
-            history.push({ role: "user", content: `${username}: ${action}${said.length > 0 ? `, "${said}"` : ""}` });
+            history.push({ role: "user", content: `<@${interaction.member.user.id}> performs an action: ${action}${said.length > 0 ? `, "${said}"` : ""}` });
 
             // -------------------------------------------------------------------------------
             // completion
@@ -137,8 +146,7 @@ export async function handle(interaction: APIApplicationCommandInteraction, env:
             result = history[history.length - 1].content;
 
 
-            let response = `${username}: [${action}] ${said ? `"${said}"` : ""}
-            ${result}`;
+            let response = `${stub}\n${result}`;
 
             // todo: it's interesting that we can do a whole host of behaviors here, not just editing the pending response (e.g. create chat channels, append emoji, change player names, etc)
             return fetch(`${DISCORD_API_ENDPOINT}/webhooks/${interaction.application_id}/${interaction.token}/messages/@original`, {
