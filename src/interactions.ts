@@ -186,6 +186,16 @@ export async function handle(interaction: APIApplicationCommandInteraction, env:
 
             let system: OAIChatMessage = { role: "system", content: "You are the designer of pen and paper roleplaying games. Users will ask you for a campaign about a topic, and you will generate the name and description of this campaign. Output should be in JSON format, with three fields: \"name\", \"full_description\", and \"short_description\"" }
             let userRequest: OAIChatMessage = { role: "user", "content": campaignUserDescription };
+            const stub = `Generating a new campaign about: "_${campaignUserDescription}_"`;
+            
+            await fetch(`${DISCORD_API_ENDPOINT}/webhooks/${interaction.application_id}/${interaction.token}/messages/@original`, {
+                method: 'PATCH',
+                headers: {
+                    'content-type': 'application/json;charset=UTF-8',
+                },
+                body: JSON.stringify({ content: stub, flags: 1 << 6 })
+            });
+
             let result = await oai_chat([system, userRequest], env.OPENAI_SECRET);
 
             let campaignString = result.choices[0].message.content;
@@ -253,7 +263,7 @@ export async function handle(interaction: APIApplicationCommandInteraction, env:
                     headers: {
                         'content-type': 'application/json;charset=UTF-8',
                     },
-                    body: JSON.stringify({ content: `<#${channel.id}> ${campaignData.short_description}`, flags: 1 << 6 })
+                    body: JSON.stringify({ content: `${stub}\n<#${channel.id}> ${campaignData.short_description}`, flags: 1 << 6 })
                 }),
             ])
         }
