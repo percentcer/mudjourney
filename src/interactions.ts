@@ -89,7 +89,6 @@ export async function handle(interaction: APIApplicationCommandInteraction, env:
     }
 
     const cmd = interaction.data as APIChatInputApplicationCommandInteractionData;
-    var username = interaction.member.user.username;
 
     switch (cmd.name) {
         // --------------------------------------------------------------------
@@ -147,9 +146,15 @@ export async function handle(interaction: APIApplicationCommandInteraction, env:
             const completion = await oai_chat(history, env.OPENAI_SECRET);
             console.log(`tokens: ${completion.usage.total_tokens}`);
             history.push(completion.choices[0].message);
-            await kv.put(`${interaction.channel_id}.events`, JSON.stringify(history));
+            
             result = history[history.length - 1].content;
 
+            if (completion.usage.total_tokens / 4096 > 0.8) {
+                // compress history
+                let summaryRequest = await oai_chat(history.concat([{role: "user", content: "please summarize the story so far"}]), env.OPENAI_SECRET);
+                history = [history[0]].concat(summaryRequest.choices[0].message);
+            }
+            await kv.put(`${interaction.channel_id}.events`, JSON.stringify(history));
 
             let response = `${stub}\n${result}`;
 
