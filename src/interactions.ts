@@ -104,7 +104,7 @@ async function oai_chat_streaming(messages: OAIChatMessage[], stub: string, patc
                             if (delta.content) {
                                 updated += delta.content;
                             }
-                            console.log(dat.choices[0].delta);
+                            // console.log(dat.choices[0].delta);
                             sliceStart = m.index! + m[0].length;
                         }
                         if (updated.length - committed.length > 64) {
@@ -233,7 +233,19 @@ export async function handle(interaction: APIApplicationCommandInteraction, env:
             // tokens are not-quite words and the average word length in english is 4.6 characters, so, uh...
             if (hack_fakeTokenCount / (4096 * 4) > 0.8) {
                 // compress history
-                let summaryRequest = await oai_chat(history.concat([{ role: "user", content: "please summarize the story so far" }]), env.OPENAI_SECRET);
+                let summaryRequest = await oai_chat(history.concat([{ role: "user", content: "print a summary of the story so far" }]), env.OPENAI_SECRET);
+                console.log(`nearing context limit, requested summary: ${summaryRequest.choices[0].message.content}`);
+                ctx.waitUntil(
+                    fetch(`${DISCORD_API_ENDPOINT}/channels/${interaction.channel_id}/messages`, {
+                        method: "POST",
+                        headers: {
+                            'content-type': 'application/json;charset=UTF-8',
+                            Authorization: `Bot ${env.DISCORD_BOT_TOKEN}`
+                        },
+                        body: JSON.stringify({
+                            content: `\`\`\`${summaryRequest.choices[0].message.content}\`\`\``
+                        })
+                    }));
                 history = [history[0]].concat(summaryRequest.choices[0].message);
             }
             await kv.put(`${interaction.channel_id}.events`, JSON.stringify(history));
@@ -253,11 +265,6 @@ export async function handle(interaction: APIApplicationCommandInteraction, env:
         // journal
         // --------------------------------------------------------------------
         case 'j': {
-            // let kv = env.TREACHEROUS;
-            // let historyString = await kv.get(`${interaction.channel_id}.events`);
-            // let history: OAIChatMessage[];
-            // history = JSON.parse(historyString!);
-            // 
             await fetch(patchURL, {
                 method: 'PATCH',
                 headers: {
