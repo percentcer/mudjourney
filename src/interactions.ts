@@ -243,7 +243,7 @@ export async function handle(interaction: APIApplicationCommandInteraction, env:
                             Authorization: `Bot ${env.DISCORD_BOT_TOKEN}`
                         },
                         body: JSON.stringify({
-                            content: `\`\`\`${summaryRequest.choices[0].message.content}\`\`\``
+                            content: `**Interlude:**\n>>> *${summaryRequest.choices[0].message.content}*`
                         })
                     }));
                 history = [history[0]].concat(summaryRequest.choices[0].message);
@@ -272,23 +272,24 @@ export async function handle(interaction: APIApplicationCommandInteraction, env:
                 },
                 body: JSON.stringify({ content: "Checking the journal..." })
             });
-            let events: OAIChatMessage[] = JSON.parse(await env.TREACHEROUS.get(`${interaction.channel_id}.events`) ?? "[]");
-            let message = "Checking the journal..."
-            let recent = events.slice(-5);
-            if (recent.length > 0) {
-                let filtered = recent.filter(v => v.role === "assistant");
-                let bulleted = filtered.map(v => `* ${v.content}`);
-                message = `${message}\n${bulleted.join('\n')}`;
-            } else {
-                message = `${message} but no entries were found!`;
-            }
-            return fetch(patchURL, {
-                method: 'PATCH',
-                headers: {
-                    'content-type': 'application/json;charset=UTF-8',
-                },
-                body: JSON.stringify({ content: message, flags: 1 << 6 })
-            });
+            let kv = env.TREACHEROUS;
+            let historyString = await kv.get(`${interaction.channel_id}.events`);
+            let history: OAIChatMessage[];
+            history = JSON.parse(historyString!);
+
+            // compress history
+            let summaryRequest = await oai_chat(history.concat([{ role: "user", content: "please print a summary of the story so far, starting with \"Our story so far:\"" }]), env.OPENAI_SECRET);
+            ctx.waitUntil(
+                fetch(`${DISCORD_API_ENDPOINT}/channels/${interaction.channel_id}/messages`, {
+                    method: "POST",
+                    headers: {
+                        'content-type': 'application/json;charset=UTF-8',
+                        Authorization: `Bot ${env.DISCORD_BOT_TOKEN}`
+                    },
+                    body: JSON.stringify({
+                        content: `**Journal:**\n>>> *${summaryRequest.choices[0].message.content}*`
+                    })
+                }));
         }
         // --------------------------------------------------------------------
         // new-campaign
