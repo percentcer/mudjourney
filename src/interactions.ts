@@ -89,7 +89,7 @@ async function oai_chat_streaming(messages: OAIChatMessage[], stub: string, patc
                                 headers: {
                                     'content-type': 'application/json;charset=UTF-8',
                                 },
-                                body: JSON.stringify({ content: `${stub}\n${updated}` })
+                                body: JSON.stringify({ content: `${stub}${updated}` })
                             })
                             resolve({ role: "assistant", content: updated });
                             return;
@@ -113,7 +113,7 @@ async function oai_chat_streaming(messages: OAIChatMessage[], stub: string, patc
                                 headers: {
                                     'content-type': 'application/json;charset=UTF-8',
                                 },
-                                body: JSON.stringify({ content: `${stub}\n${updated}` })
+                                body: JSON.stringify({ content: `${stub}${updated}` })
                             });
                             committed = updated;
                         }
@@ -221,7 +221,7 @@ export async function handle(interaction: APIApplicationCommandInteraction, env:
             // completion
             // -------------------------------------------------------------------------------
             // const completion = await oai_chat(history, env.OPENAI_SECRET);
-            let completion = await oai_chat_streaming(history, stub, patchURL, env.OPENAI_SECRET);
+            let completion = await oai_chat_streaming(history, `${stub}\n\n`, patchURL, env.OPENAI_SECRET);
             // console.log(`tokens: ${completion.usage.total_tokens}`);
             history.push(completion);
 
@@ -250,7 +250,7 @@ export async function handle(interaction: APIApplicationCommandInteraction, env:
             }
             await kv.put(`${interaction.channel_id}.events`, JSON.stringify(history));
 
-            let response = `${stub}\n${result}`;
+            let response = `${stub}\n\n${result}`;
 
             // todo: it's interesting that we can do a whole host of behaviors here, not just editing the pending response (e.g. create chat channels, append emoji, change player names, etc)
             return fetch(patchURL, {
@@ -265,31 +265,19 @@ export async function handle(interaction: APIApplicationCommandInteraction, env:
         // journal
         // --------------------------------------------------------------------
         case 'j': {
+            const stub = "**Journal**:\n>>> ";
             await fetch(patchURL, {
                 method: 'PATCH',
                 headers: {
                     'content-type': 'application/json;charset=UTF-8',
                 },
-                body: JSON.stringify({ content: "Checking the journal..." })
+                body: JSON.stringify({ content: stub })
             });
             let kv = env.TREACHEROUS;
             let historyString = await kv.get(`${interaction.channel_id}.events`);
             let history: OAIChatMessage[];
             history = JSON.parse(historyString!);
-
-            // compress history
-            let summaryRequest = await oai_chat(history.concat([{ role: "user", content: "please print a summary of the story so far, starting with \"Our story so far:\"" }]), env.OPENAI_SECRET);
-            ctx.waitUntil(
-                fetch(`${DISCORD_API_ENDPOINT}/channels/${interaction.channel_id}/messages`, {
-                    method: "POST",
-                    headers: {
-                        'content-type': 'application/json;charset=UTF-8',
-                        Authorization: `Bot ${env.DISCORD_BOT_TOKEN}`
-                    },
-                    body: JSON.stringify({
-                        content: `**Journal:**\n>>> *${summaryRequest.choices[0].message.content}*`
-                    })
-                }));
+            let summaryRequest = await oai_chat_streaming(history.concat([{ role: "user", content: "Please print a summary of the story so far, starting with \"Our story so far:\". Do not say \"sure\" or anything like that, just print the summary." }]), stub, patchURL, env.OPENAI_SECRET);
         }
         // --------------------------------------------------------------------
         // new-campaign
