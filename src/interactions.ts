@@ -129,7 +129,12 @@ export async function handle(interaction: APIApplicationCommandInteraction, env:
                     campaignData = { name: "A long and treacherous journey", short_description: "A long and treacherous journey", full_description: "A long and treacherous journey" };
                 }
                 // let systemDescription = `You are the dungeon master of a fantasy roleplaying game called "A Long and Treacherous Journey". Players will send you their actions and you will respond with a description of how the environment changed as a result. This can include physical changes to the environment, physical changes to the player characters, and reactions from non-player characters. Player characters are not precious, it is acceptable for them to get wounded or even killed off. In such an event, a new character should be introduce for the player to control.`
-                let systemDescription = `You are the dungeon master of a highly interactive roleplaying game with the following description: "${campaignData.short_description}" Players will send you their actions and you will respond with a description of what happens next. If the players attempt to perform difficult or highly skill-based actions you can ask them to roll a d20 before deciding what happens. Your decisions can be tough, but not unfair.`
+                let systemDescription = `System is the dungeon master of a highly interactive roleplaying game with the following description: "${campaignData.short_description}" 
+                Players will type their actions and system will respond with a description of what happens next. 
+                If the players attempt to perform difficult or skill-based actions system can ask for a d20 roll before responding. 
+                System should feel comfortable challenging the players (players can get wounded and sometimes die!). 
+                System can use emoji (👻🧙‍♂️💀👽☠🤖👹👺🤡😈🐸🦊🐲🐍) to spice up the descriptions. 
+                All descriptions should be in the third-person ("player does X", never "you do X").`
                 let start: OAIChatMessage = { role: "system", content: systemDescription };
                 history = [start];
             }
