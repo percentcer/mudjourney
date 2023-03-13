@@ -150,7 +150,7 @@ async function oai_image(prompt: string, key: string): Promise<OAIImageGeneratio
     return response.json();
 }
 
-type CampaignDescription = { name: string, full_description: string, short_description: string };
+type CampaignDescription = { name: string, full_description: string, short_description: string, representative_emoji_pair: string };
 
 export async function handle(interaction: APIApplicationCommandInteraction, env: Env, ctx: ExecutionContext): Promise<any> {
     const patchURL = `${DISCORD_API_ENDPOINT}/webhooks/${interaction.application_id}/${interaction.token}/messages/@original`;
@@ -206,7 +206,7 @@ export async function handle(interaction: APIApplicationCommandInteraction, env:
                 if (campaignString !== null) {
                     campaignData = JSON.parse(campaignString);
                 } else {
-                    campaignData = { name: "A long and treacherous journey", short_description: "A long and treacherous journey", full_description: "A long and treacherous journey" };
+                    campaignData = { name: "A long and treacherous journey", short_description: "A long and treacherous journey", full_description: "A long and treacherous journey", representative_emoji_pair: "🗺💀" };
                 }
                 // let systemDescription = `You are the dungeon master of a fantasy roleplaying game called "A Long and Treacherous Journey". Players will send you their actions and you will respond with a description of how the environment changed as a result. This can include physical changes to the environment, physical changes to the player characters, and reactions from non-player characters. Player characters are not precious, it is acceptable for them to get wounded or even killed off. In such an event, a new character should be introduce for the player to control.`
                 let systemDescription = `System is the dungeon master of a highly interactive roleplaying game with the following description: "${campaignData.short_description}" 
@@ -289,7 +289,7 @@ export async function handle(interaction: APIApplicationCommandInteraction, env:
         case 'new-campaign': {
             let campaignUserDescription = (cmd.options![0] as APIApplicationCommandInteractionDataStringOption).value;
 
-            let system: OAIChatMessage = { role: "system", content: "You are the designer of pen and paper roleplaying games. Users will ask you for a campaign about a topic, and you will generate the name and description of this campaign. Output should be in JSON format, with three fields: \"name\", \"full_description\", and \"short_description\"" }
+            let system: OAIChatMessage = { role: "system", content: "You are the designer of pen and paper roleplaying games. Users will ask you for a campaign about a topic, and you will generate the name and description of this campaign. Output should be in JSON format, with four fields: \"name\", \"full_description\", \"short_description\", and \"representative_emoji_pair\"" }
             let userRequest: OAIChatMessage = { role: "user", "content": campaignUserDescription };
             const stub = `Generating a new campaign about: "_${campaignUserDescription}_"`;
 
@@ -342,7 +342,7 @@ export async function handle(interaction: APIApplicationCommandInteraction, env:
                     Authorization: `Bot ${env.DISCORD_BOT_TOKEN}`
                 },
                 body: JSON.stringify({
-                    name: campaignData.name,
+                    name: `${campaignData.representative_emoji_pair}${campaignData.name}`,
                     type: 0, // text
                     topic: campaignData.short_description,
                     parent_id: categoryCampaigns?.id,
