@@ -174,6 +174,10 @@ export async function handle(interaction: APIApplicationCommandInteraction, env:
         case "a": {
             let options = cmd.options!;
             let action = (options[0] as APIApplicationCommandInteractionDataStringOption).value;
+            if (action.startsWith('roll')) {
+                let result = Math.floor(Math.random() * 20) + 1;
+                action = `rolls a ${result} on a d20`;
+            }
             let said = options.length > 1 ? (options[1] as APIApplicationCommandInteractionDataStringOption).value : "";
 
             const stub = `<@${interaction.member.user.id}>: [${action}] ${said ? `"${said}"` : ""}`
