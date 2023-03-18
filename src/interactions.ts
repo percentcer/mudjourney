@@ -108,7 +108,7 @@ async function oai_chat_streaming(messages: OAIChatMessage[], stub: string, patc
                             // console.log(dat.choices[0].delta);
                             sliceStart = m.index! + m[0].length;
                         }
-                        if (updated.length - committed.length > 32) {
+                        if (updated.length - committed.length > 64) {
                             await fetch(patchURL, {
                                 method: 'PATCH',
                                 headers: {
